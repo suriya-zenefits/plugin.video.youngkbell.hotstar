@@ -10,8 +10,8 @@
         <provides>video</provides>
     </extension>
     <extension point="xbmc.addon.metadata">
-        <summary lang="en_GB">Hotstar is India’s largest premium streaming platform with more than 100,000 hours of drama &amp; movies in 17 languages, &amp; coverage of every major global sporting event. The app created a global record for the maximum numbers of simultaneous viewers for an online event during Vivo IPL 2018. </summary>
-        <description lang="en_GB"></description>
+        <summary lang="en_GB">Hotstar is India's largest premium streaming platform with more than 100,000 hours of drama &amp; movies in 17 languages, &amp; coverage of every major global sporting event. The app created a global record for the maximum numbers of simultaneous viewers for an online event during Vivo IPL 2018.</summary>
+        <description lang="en_GB">Hotstar is India's largest premium streaming platform with more than 100,000 hours of drama &amp; movies in 17 languages, &amp; coverage of every major global sporting event. The app created a global record for the maximum numbers of simultaneous viewers for an online event during Vivo IPL 2018.</description>
         <language></language>
         <platform>all</platform>
         <license>GPL-3.0</license>
