@@ -5,7 +5,7 @@ from resources.lib import kodilogging
 
 import requests
 import urllib2
-
+import random
 
 import hashlib
 import hmac
@@ -37,6 +37,7 @@ _url = sys.argv[0]
 _handle = int(sys.argv[1])
 
 session = requests.Session()
+_country_code = 'IN'
 
 
 def _hotstarauth_key():
@@ -76,21 +77,24 @@ _GET_HEADERS = {
 }
 
 
-def make_request(url, country_code=None):
+def make_request(url):
     try:
-        logger.info("Making request: {}, country_code: {}".format(url, country_code))
+        logger.info("Making request: {}, country_code: {}".format(url, _country_code))
         headers = _GET_HEADERS
-        if country_code is not None:
-            headers['x-country-code'] = country_code
+        if _country_code is not None:
+            headers['x-country-code'] = _country_code
 
         response = session.get(url, headers=headers, cookies=session.cookies)
         data = response.json()
         if data.get('statusCodeValue') == 200:
             return data
 
-        elif country_code is None:
+        elif _country_code == 'IN':
+            global _country_code
+            _country_code = 'CA'
+
             logger.debug('Falling back to CA country code for getting the data for {}'.format(url))
-            return make_request(url, country_code='CA')
+            return make_request(url)
 
         else:
             raise Exception('Failed to fetch data for API!', url)
@@ -151,23 +155,39 @@ def list_program_details(title, uri):
         if not item.get('uri') or not (assets and assets.get('totalResults', 0)):
             continue
 
+        asset_item = {}
+        try:
+            asset_item = assets['items'][0]
+        except Exception:
+            pass
+
         item_title = item['title']
-        content_id = program['contentId'] if program else ''
-        description = program['description'] if program else 'N/A'
-        genre = program.get('genre') if program else 'N/A'
-        if item_title == 'Seasons':
+        content_id = program['contentId'] if program else asset_item.get('contentId')
+        description = program['description'] if program else asset_item.get('description')
+        genre = program.get('genre') if program else asset_item.get('genre')
+
+        asset_type = asset_item.get('assetType')
+        if asset_type in ['SEASON']:
             action = 'seasons'
+
+        elif asset_type in ['SHOW']:
+            action = 'programs'
+
+        elif asset_type in ['CHANNEL']:
+            action = 'channels'
+
         else:
             action = 'episodes'
 
         _add_directory_item(
-            title,
-            item_title,
-            content_id,
-            genre,
-            description,
-            item['uri'],
-            action
+            parent_title=title,
+            title=item_title,
+            content_id=content_id,
+            genre=genre,
+            description=description,
+            uri=item['uri'],
+            action=action,
+            image=get_thumbnail_image(asset_item) if asset_item else None
         )
 
     # Add Search.
@@ -216,13 +236,13 @@ def list_seasons(title, url):
         season_uri = '{}?{}'.format(base_url, urlencode(params))
 
         _add_directory_item(
-            title,
-            season['title'],
-            season['contentId'],
-            None,
-            None,
-            season_uri,
-            'episodes'
+            title=season['title'],
+            content_id=season['contentId'],
+            description=season.get('description', season['title']),
+            uri=season_uri,
+            action='episodes',
+            parent_title=title,
+            image=get_thumbnail_image(season)
         )
 
     _add_next_page_and_search_item(result['nextPage'], 'seasons', title)
@@ -263,7 +283,7 @@ def _add_video_item(video):
 
     # Set graphics (thumbnail, fanart, banner, poster, landscape etc.) for the list item.
     # Here we use the same image for all items for simplicity's sake.
-    image = get_thumbnail_image(video['contentId'])
+    image = get_thumbnail_image(video)
     list_item.setArt({
         'thumb': image,
         'icon': image,
@@ -346,12 +366,49 @@ def list_episodes(title, uri):
     xbmcplugin.endOfDirectory(_handle)
 
 
-def get_thumbnail_image(content_id):
-    content_id = str(content_id)
-    return 'https://secure-media2.hotstar.com/t_web_hs_3x/r1/thumbs/PCTV/'\
-        '{contentIdLastTwo}/{contentId}/PCTV-{contentId}-hcdl.jpg'.format(
-            contentIdLastTwo=content_id[2:], contentId=content_id
+def get_image_url(content_id, images=None, hs_field='hs', image_size="web_hs_3x"):
+    def get_image_url_akamai():
+        if not content_id:
+            return
+
+        _image_size = "" if 'web_' not in image_size else "t_" + image_size + "/"
+        _hs_field = 'hcdl' if hs_field == 'hs' else hs_field
+
+        content_id_minified = str(content_id)[-2:]
+        if len(content_id_minified) == 1:
+            content_id_minified = "0{}".format(content_id_minified)
+
+        return "https://secure-media{shard}.hotstar.com/{imageSize}r1/thumbs/PCTV/{contentIdMinified}/{contentId}/PCTV-{contentId}-{hsField}.jpg".format(
+            shard=random.randint(0, 3),
+            imageSize=_image_size,
+            contentIdMinified=content_id_minified,
+            contentId=content_id,
+            hsField=_hs_field
         )
+
+    def get_image_url_cms():
+        _hs_field = {"hc1": "m", "vl": "v"}.get(hs_field, "h")
+        source = images.get(_hs_field) or images.get(_hs_field.upper())
+        if source is None:
+            return get_image_url_akamai()
+
+        return "https://img{shard}.hotstar.com/image/upload/f_auto,t_{imageSize}/{source}".format(
+            shard=random.randint(0, 3),
+            imageSize=image_size,
+            source=source
+        )
+
+    if images:
+        return get_image_url_cms()
+    else:
+        return get_image_url_akamai()
+
+
+def get_thumbnail_image(item):
+    return get_image_url(
+        content_id=item.get('imgContentId') or item.get('contentId') or item.get('contain_id'),
+        images=item.get('images'),
+    )
 
 
 def _add_next_page_and_search_item(uri, action, original_title):
@@ -376,19 +433,29 @@ def _add_next_page_and_search_item(uri, action, original_title):
     _add_search_item()
 
 
-def _add_directory_item(parent_title, title, content_id, genre, description, uri, action):
+def _add_directory_item(
+    title,
+    description,
+    content_id,
+    action,
+    image=None,
+    genre=None,
+    uri='',
+    parent_title='',
+    country_code=None,
+):
     # Create a list item with a text label and a thumbnail image.
     list_item = xbmcgui.ListItem(label=title)
 
     # Set graphics (thumbnail, fanart, banner, poster, landscape etc.) for the list item.
     # Here we use the same image for all items for simplicity's sake.
     # In a real-life plugin you need to set each image accordingly.
-    image = get_thumbnail_image(content_id)
-    list_item.setArt({
-        'thumb': image,
-        'icon': image,
-        'fanart': image
-    })
+    if image:
+        list_item.setArt({
+            'thumb': image,
+            'icon': image,
+            'fanart': image
+        })
 
     # Set additional info for the list item.
     # Here we use a category name for both properties for for simplicity's sake.
@@ -406,7 +473,12 @@ def _add_directory_item(parent_title, title, content_id, genre, description, uri
 
     # Create a URL for a plugin recursive call.
     # Example: plugin://plugin.video.example/?action=listing&category=Animals
-    url = get_url(action=action, uri=uri, title='{}/{}'.format(parent_title, title) if parent_title else title)
+    url = get_url(
+        action=action,
+        uri=uri,
+        title='{}/{}'.format(parent_title, title) if parent_title else title,
+        country_code=country_code if country_code else _country_code
+    )
 
     # is_folder = True means that this item opens a sub-list of lower level items.
     is_folder = True
@@ -445,13 +517,14 @@ def list_programs(channel_name, uri):
         #     "premium": false
         # },
         _add_directory_item(
-            channel_name,
-            program['title'],
-            program['contentId'],
-            program.get('genre'),
-            program['description'],
-            program['uri'],
-            'program_details'
+            parent_title=channel_name,
+            title=program['title'],
+            content_id=program['contentId'],
+            genre=program.get('genre'),
+            description=program['description'],
+            uri=program['uri'],
+            action='program_details',
+            image=get_thumbnail_image(program)
         )
 
     _add_next_page_and_search_item(result['nextPage'], 'programs', channel_name)
@@ -463,7 +536,7 @@ def list_programs(channel_name, uri):
     xbmcplugin.endOfDirectory(_handle)
 
 
-def list_channels():
+def list_channels(title=None, uri=None):
     """
     Create the list of video categories in the Kodi interface.
     """
@@ -477,7 +550,7 @@ def list_channels():
     # xbmcplugin.setContent(_handle, 'videos')
 
     # Get channels.
-    result = _get_data('https://api.hotstar.com/o/v1/channel/list?perPage=1000')
+    result = _get_data(uri or 'https://api.hotstar.com/o/v1/channel/list?perPage=1000')
     # Iterate through categories
     for channel in result['items']:
         # Channel JSON structure.
@@ -499,55 +572,48 @@ def list_channels():
         # },
         #
         _add_directory_item(
-            '',
-            channel['title'],
-            channel['contentId'],
-            channel.get('genre'),
-            channel['description'],
-            channel['uri'],
-            'programs'
+            parent_title=title,
+            title=channel['title'],
+            content_id=channel['contentId'],
+            genre=channel.get('genre'),
+            description=channel['description'],
+            uri=channel['uri'],
+            action='programs',
+            image=get_thumbnail_image(channel)
         )
 
-    # Add Sports
-    _add_directory_item(
-        '',
-        'Hotstar Sports',
-        821,
-        'Sports',
-        'Sports',
-        'https://api.hotstar.com/o/v1/page/1327?tas=30',
-        'program_details'
-    )
-    # Movies
-    _add_directory_item(
-        '',
-        'Hotstar Movies',
-        821,
-        'Movies',
-        'Movies',
-        'https://api.hotstar.com/o/v1/page/1328?tas=30',
-        'program_details'
-    )
-    # https://api.hotstar.com/o/v1/page/1329?offset=0&size=20&tao=0&tas=20
-    _add_directory_item(
-        '',
-        'Hotstar TV',
-        821,
-        'TV',
-        'TV',
-        'https://api.hotstar.com/o/v1/page/1329?tas=30',
-        'program_details'
-    )
-    # # https://api.hotstar.com/o/v1/page/1329?offset=0&size=20&tao=0&tas=20
-    # _add_directory_item(
-    #     '',
-    #     'Hotstar TV',
-    #     821,
-    #     'TV',
-    #     'TV',
-    #     'https://api.hotstar.com/o/v1/page/1329?tas=30',
-    #     'program_details'
-    # )
+    if not uri:
+        # Add Sports
+        _add_directory_item(
+            title='HotStar Sports',
+            description='Sports',
+            content_id=821,
+            genre='Sports',
+            uri='https://api.hotstar.com/o/v1/page/1327?tas=30',
+            action='program_details',
+            country_code='CA'
+        )
+        # Movies
+        _add_directory_item(
+            title='HotStar Movies',
+            content_id=821,
+            genre='Movies',
+            description='Movies',
+            uri='https://api.hotstar.com/o/v1/page/1328?tas=30',
+            action='program_details',
+            country_code='CA'
+        )
+
+        # TV
+        _add_directory_item(
+            title='HotStar TV',
+            content_id=821,
+            description='TV',
+            genre='TV',
+            uri='https://api.hotstar.com/o/v1/page/1329?tas=30',
+            action='program_details',
+            country_code='CA'
+        )
 
     _add_search_item()
 
@@ -567,7 +633,8 @@ def get_url(**kwargs):
     :return: plugin call URL
     :rtype: str
     """
-    return '{0}?{1}'.format(_url, urlencode(kwargs))
+    valid_kwargs = {key: value for key, value in kwargs.iteritems() if value is not None}
+    return '{0}?{1}'.format(_url, urlencode(valid_kwargs))
 
 
 def play_video(path):
@@ -594,7 +661,9 @@ def get_user_input():
 
 
 def _add_search_item():
-    _add_directory_item('', '| Search', 1, 'Search', 'Search', '', 'search')
+    _add_directory_item(
+        title='| Search', content_id=1, description='Search', action='search'
+    )
 
 
 def list_search():
@@ -612,13 +681,14 @@ def list_search():
         asset_type = item.get('assetType')
         if asset_type in ['CHANNEL', 'SHOW']:
             _add_directory_item(
-                'Search/{}'.format(query),
-                item['title'],
-                item['contentId'],
-                item.get('genre'),
-                item['description'],
-                item['uri'],
-                'programs' if asset_type == 'CHANNEL' else 'program_details'
+                parent_title='Search/{}'.format(query),
+                title=item['title'],
+                content_id=item['contentId'],
+                genre=item.get('genre'),
+                description=item['description'],
+                uri=item['uri'],
+                action='programs' if asset_type == 'CHANNEL' else 'program_details',
+                image=get_thumbnail_image(item)
             )
 
         elif asset_type in ['MOVIE', 'VIDEO']:
@@ -646,6 +716,11 @@ def router(paramstring):
         title = params.get('title')
         uri = params.get('uri', None)
         action = params['action']
+        country_code = params.get('country_code', None)
+        global _country_code
+        if country_code:
+            _country_code = country_code
+
         if action == 'programs':
             list_programs(title, uri)
 
@@ -664,6 +739,9 @@ def router(paramstring):
 
         elif action == 'search':
             list_search()
+
+        elif action == 'channels':
+            list_channels(title, uri)
 
         else:
             # If the provided paramstring does not contain a supported action

@@ -1,2 +1,5 @@
 v0.0.1
 - Initial version
+
+v1.0.0
+- Fixing images and optimize for CA
