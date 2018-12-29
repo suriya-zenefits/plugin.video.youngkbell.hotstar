@@ -120,7 +120,16 @@ def get_playback_url(url):
     if not data:
         return
 
-    return data['body']['results']['item']['playbackUrl']
+    playback_url = data['body']['results']['item']['playbackUrl']
+
+    if 'manifest.f4m' in playback_url:
+        return playback_url.replace(
+            'http://', 'https://'
+        ).replace(
+            '/z/', '/i/'
+        ).replace('manifest.f4m', 'master.m3u8')
+
+    return playback_url
 
 
 def list_program_details(title, uri):
@@ -520,10 +529,10 @@ def list_programs(channel_name, uri):
             parent_title=channel_name,
             title=program['title'],
             content_id=program['contentId'],
-            genre=program.get('genre'),
-            description=program['description'],
+            genre=program.get('genre') or program['title'],
+            description=program.get('description'),
             uri=program['uri'],
-            action='program_details',
+            action='programs' if program.get('assetType') == 'GENRE' else 'program_details',
             image=get_thumbnail_image(program)
         )
 
@@ -613,6 +622,16 @@ def list_channels(title=None, uri=None):
             uri='https://api.hotstar.com/o/v1/page/1329?tas=30',
             action='program_details',
             country_code='CA'
+        )
+
+        # Genre
+        _add_directory_item(
+            title='HotStar Genres',
+            content_id=821,
+            description='Genres',
+            genre='Genre',
+            uri='https://api.hotstar.com/o/v1/genre/list?perPage=1000',
+            action='programs',
         )
 
     _add_search_item()
