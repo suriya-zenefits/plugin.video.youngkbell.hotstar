@@ -22,8 +22,8 @@
         <news></news>
         <disclaimer></disclaimer>
         <assets>
-            <icon>resources/icon.png</icon>
-            <fanart>resources/fanart.jpg</fanart>
+            <icon>resources/icon_hotstar.png</icon>
+            <fanart>resources/fanart_hotstar.jpg</fanart>
         </assets>
     </extension>
 </addon>
