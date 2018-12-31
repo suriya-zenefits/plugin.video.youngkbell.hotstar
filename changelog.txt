@@ -3,3 +3,6 @@ v0.0.1
 
 v1.0.0
 - Fixing images and optimize for CA
+
+v2.0.0
+- Change icons
