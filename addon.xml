@@ -22,7 +22,7 @@
         <news></news>
         <disclaimer></disclaimer>
         <assets>
-            <icon>resources/icon_hotstar.png</icon>
+            <icon>resources/icon_hotstar.jpeg</icon>
             <fanart>resources/fanart_hotstar.jpg</fanart>
         </assets>
     </extension>
