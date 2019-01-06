@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import xbmcaddon
-from resources.lib import kodilogging
+from . import kodilogging
 
 import requests
 import urllib2
@@ -26,7 +26,7 @@ import xbmcplugin
 
 ADDON = xbmcaddon.Addon()
 logger = logging.getLogger(ADDON.getAddonInfo('id'))
-kodilogging.config()
+kodilogging.config(logger)
 
 #
 # Globals
@@ -664,7 +664,10 @@ def play_video(path):
     :type path: str
     """
     # Create a playable item with a path to play.
-    play_item = xbmcgui.ListItem(path=get_playback_url(path))
+    path = get_playback_url(path)
+    logger.info('Playing video URL: {}'.format(path))
+
+    play_item = xbmcgui.ListItem(path=path)
     # Pass the item to the Kodi player.
     xbmcplugin.setResolvedUrl(_handle, True, listitem=play_item)
 
