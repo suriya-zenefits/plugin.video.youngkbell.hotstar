@@ -115,23 +115,6 @@ def _next_page(results):
     return assets['nextOffsetURL'] if 'nextOffsetURL' in assets else None
 
 
-def get_playback_url(url):
-    data = make_request(url)
-    if not data:
-        return
-
-    playback_url = data['body']['results']['item']['playbackUrl']
-
-    if 'manifest.f4m' in playback_url:
-        return playback_url.replace(
-            'http://', 'https://'
-        ).replace(
-            '/z/', '/i/'
-        ).replace('manifest.f4m', 'master.m3u8')
-
-    return playback_url
-
-
 def list_program_details(title, uri):
     if not uri:
         return
@@ -485,7 +468,7 @@ def _add_directory_item(
     url = get_url(
         action=action,
         uri=uri,
-        title='{}/{}'.format(parent_title, title) if parent_title else title,
+        title=u'{}/{}'.format(parent_title, title) if parent_title else title,
         country_code=country_code if country_code else _country_code
     )
 
@@ -652,8 +635,8 @@ def get_url(**kwargs):
     :return: plugin call URL
     :rtype: str
     """
-    valid_kwargs = {key: value for key, value in kwargs.iteritems() if value is not None}
-    return '{0}?{1}'.format(_url, urlencode(valid_kwargs))
+    valid_kwargs = {key: value.encode('utf-8') for key, value in kwargs.iteritems() if value is not None}
+    return u'{0}?{1}'.format(_url, urlencode(valid_kwargs))
 
 
 def play_video(path):
@@ -664,10 +647,23 @@ def play_video(path):
     :type path: str
     """
     # Create a playable item with a path to play.
-    path = get_playback_url(path)
-    logger.info('Playing video URL: {}'.format(path))
+    data = make_request(path)
+    if not data:
+        return
+
+    item = data['body']['results']['item']
+    path = item['playbackUrl']
+    licenseURL = item.get('licenseUrl')
+
+    logger.info('Playing video URL: {}, licenseURL: {}'.format(path, licenseURL))
 
     play_item = xbmcgui.ListItem(path=path)
+    if licenseURL:
+        play_item.setProperty('inputstreamaddon', 'inputstream.adaptive')
+        play_item.setProperty('inputstream.adaptive.manifest_type', 'hls')
+        play_item.setMimeType('application/dash+xml')
+        play_item.setContentLookup(False)
+
     # Pass the item to the Kodi player.
     xbmcplugin.setResolvedUrl(_handle, True, listitem=play_item)
 
