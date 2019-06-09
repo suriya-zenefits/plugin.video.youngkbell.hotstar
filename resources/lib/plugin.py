@@ -1,28 +1,25 @@
 # -*- coding: utf-8 -*-
-import logging
-import xbmcaddon
-from . import kodilogging
-
-import requests
-import urllib2
-import random
-
 import hashlib
 import hmac
-
-import time
+import logging
+import random
 import re
-import xbmc
+import requests
 import sys
-
-from urllib import urlencode
-from urllib import quote
-from urlparse import parse_qsl
-
-from datetime import datetime
-
+import time
+import urllib2
+import xbmc
+import xbmcaddon
 import xbmcgui
 import xbmcplugin
+from datetime import datetime
+from urllib import quote
+from urllib import urlencode
+from urlparse import ParseResult
+from urlparse import parse_qsl
+from urlparse import urlparse
+
+from . import kodilogging
 
 ADDON = xbmcaddon.Addon()
 logger = logging.getLogger(ADDON.getAddonInfo('id'))
@@ -266,8 +263,8 @@ def _add_video_item(video):
         'genre': video.get('genre'),
         'episode': episode_no,
         'season': video.get('seasonNo'),
-        'plot': video['description'],
-        'duration': video['duration'],
+        'plot': video.get('description'),
+        'duration': video.get('duration'),
         'year': video.get('year', datetime.fromtimestamp(episode_date).year if episode_date else None),
         'date': datetime.fromtimestamp(episode_date).strftime('%d.%m.%Y') if episode_date else None,
         'mediatype': 'video',
@@ -289,7 +286,7 @@ def _add_video_item(video):
     # Create a URL for a plugin recursive call.
     # Example: plugin://plugin.video.example/?action=play&video=http:
     # //www.vidsplay.com/wp-content/uploads/2017/04/crab.mp4
-    url = get_url(action='play', uri=video['playbackUri'])
+    url = get_url(action='play', uri=video.get('playbackUri'))
 
     # Add the list item to a virtual Kodi folder.
     # is_folder = False means that this item won't open any sub-list.
@@ -651,11 +648,34 @@ def play_video(path):
     if not data:
         return
 
+    def get_subtitle(url):
+        #
+        # https://hses.akamaized.net/videos/hotstarint/hostages/1260003409/1558430241469/
+        # 265b9dab22d4e9a033e6df6f89639f17/master.m3u8?hdnea=st=1560107863~exp=1560111463~acl=
+        # /*~hmac=2f6fb393159ed5fa1b12bbf12e954eb377cfa0fc852d4ff5eb24446233237620
+        #
+        # https://hses.akamaized.net/videos/hotstarint/hostages/1260003409/1558430241469/
+        # 5d0f83c3ccbf4501cf952bdfc8c0d785/subtitle/lang_en/sub-0.vtt
+        #
+        _url = urlparse(url)
+        values = _url._asdict()
+        values['query'] = ''
+        values['path'] = '{}/subtitle/lang_en/sub-0.vtt'.format("/".join(values['path'].split('/')[:-1]))
+
+        subtitle_url = ParseResult(**values).geturl()
+        # subtitle_file = kodiutils.download_url_content_to_temp(subtitle_url, '{}-{}.srt'.format(
+        #     Zee5Plugin.safe_string(item['title']),
+        #     subtitle_lang,
+        # ))
+
+        return subtitle_url
+
     item = data['body']['results']['item']
     path = item['playbackUrl']
     licenseURL = item.get('licenseUrl')
+    subtitle = get_subtitle(path)
 
-    logger.info('Playing video URL: {}, licenseURL: {}'.format(path, licenseURL))
+    logger.info('Playing video URL: {}, licenseURL: {}, subtitle: {}'.format(path, licenseURL, subtitle))
 
     play_item = xbmcgui.ListItem(path=path)
     if licenseURL:
@@ -663,6 +683,8 @@ def play_video(path):
         play_item.setProperty('inputstream.adaptive.manifest_type', 'hls')
         play_item.setMimeType('application/dash+xml')
         play_item.setContentLookup(False)
+
+    play_item.setSubtitles([get_subtitle(path)])
 
     # Pass the item to the Kodi player.
     xbmcplugin.setResolvedUrl(_handle, True, listitem=play_item)
