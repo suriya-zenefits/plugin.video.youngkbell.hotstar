@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import hashlib
+import uuid
 import hmac
 import logging
 import random
@@ -286,7 +287,7 @@ def _add_video_item(video):
     # Create a URL for a plugin recursive call.
     # Example: plugin://plugin.video.example/?action=play&video=http:
     # //www.vidsplay.com/wp-content/uploads/2017/04/crab.mp4
-    url = get_url(action='play', uri=video.get('playbackUri'))
+    url = get_url(action='play', uri=video.get('playbackUri'), contentId=str(video.get('contentId')))
 
     # Add the list item to a virtual Kodi folder.
     # is_folder = False means that this item won't open any sub-list.
@@ -636,14 +637,27 @@ def get_url(**kwargs):
     return u'{0}?{1}'.format(_url, urlencode(valid_kwargs))
 
 
-def play_video(path):
+def play_video(path, contentId=None):
     """
     Play a video by the provided path.
 
     :param path: Fully-qualified video URL
     :type path: str
     """
+
+    # Original path -- https://api.hotstar.com/h/v1/play?contentId=1100024150
+    # https://api.hotstar.com/h/v2/play/in/contents/1100024150?desiredConfig=encryption:widevine;ladder:phone;package:dash&client=web&clientVersion=6.28.1&deviceId=3781470e-e4f2-4cab-b3d5-fdfc9ca61bc5&osName=Mac%20OS&osVersion=10.14.5
     # Create a playable item with a path to play.
+    if contentId:
+        config = "desiredConfig=encryption:widevine;ladder:phone;package:dash&client=web&clientVersion=6.28.1&deviceId={uuid}&osName=Kodi&osVersion=17.0.1".format(
+            uuid=uuid.uuid4()
+        )
+        path = "https://api.hotstar.com/h/v2/play/{ccode}/contents/{contentId}?{config}".format(
+            ccode=_country_code.lower(),
+            contentId=contentId,
+            config=config
+        )
+
     data = make_request(path)
     if not data:
         return
@@ -670,7 +684,14 @@ def play_video(path):
 
         return subtitle_url
 
-    item = data['body']['results']['item']
+    if contentId:
+        item = (
+            filter(lambda x: '.m3u8' in x['playbackUrl'], data['body']['results']['playBackSets'])
+            or data['body']['results']['playBackSets']
+        )[0]
+    else:
+        item = data['body']['results']['item']
+
     path = item['playbackUrl']
     licenseURL = item.get('licenseUrl')
     subtitle = get_subtitle(path)
@@ -775,7 +796,7 @@ def router(paramstring):
 
         elif action == 'play':
             # Play a video from a provided URL.
-            play_video(uri)
+            play_video(uri, contentId=params.get('contentId'))
 
         elif action == 'search':
             list_search()
