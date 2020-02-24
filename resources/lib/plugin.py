@@ -698,7 +698,7 @@ def play_video(path, contentId=None):
 
     logger.info('Playing video URL: {}, licenseURL: {}, subtitle: {}'.format(path, licenseURL, subtitle))
 
-    play_item = xbmcgui.ListItem(path=path)
+    play_item = xbmcgui.ListItem(path=path+'|'+urlencode({'User-Agent': 'Hotstar;in.startv.hotstar/8.2.4 (Linux;Android 8.0.0) ExoPlayerLib/2.9.5'}))
     if licenseURL:
         play_item.setProperty('inputstreamaddon', 'inputstream.adaptive')
         play_item.setProperty('inputstream.adaptive.manifest_type', 'hls')
