@@ -67,6 +67,8 @@ _GET_HEADERS = {
     "x-country-code": "IN",
     "x-client-code": "LR",
     "x-platform-code": "PCTV",
+    "X-HS-AppVersion": "3.3.7",
+    "X-HS-Platform": "firetv",
     "Accept": "*/*",
     "Referer": "https://ca.hotstar.com/",
     "Accept-Encoding": "gzip, deflate, br",
@@ -652,7 +654,7 @@ def play_video(path, contentId=None):
         config = "desiredConfig=encryption:widevine;ladder:phone;package:dash&client=web&clientVersion=6.28.1&deviceId={uuid}&osName=Kodi&osVersion=17.0.1".format(
             uuid=uuid.uuid4()
         )
-        path = "https://api.hotstar.com/h/v1/play/{ccode}/contents/{contentId}?{config}".format(
+        path = "https://api.hotstar.com/h/v2/play/{ccode}/contents/{contentId}?{config}".format(
             ccode=_country_code.lower(),
             contentId=contentId,
             config=config
