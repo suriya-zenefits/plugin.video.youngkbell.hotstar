@@ -63,7 +63,7 @@ _auth = _hotstarauth_key()
 _GET_HEADERS = {
     "Origin": "https://ca.hotstar.com",
     "hotstarauth": _auth,
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.80 Safari/537.36",
+    "User-Agent": "Hotstar;in.startv.hotstar/3.3.7 (Android/8.1.0)",
     "x-country-code": "IN",
     "x-client-code": "LR",
     "x-platform-code": "PCTV",
